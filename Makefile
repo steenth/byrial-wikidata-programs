@@ -1,11 +1,11 @@
 C_OPTIONS =  -g -Wall -Wextra -std=c99 -O2 $(shell mysql_config --include)
 LINK_OPTIONS = -g -Wall -Wextra -O2
-
+# taxon_check2 duplicate_link sex_distribution selflink alias-without-label 
 PROGRAMS = read_items language_statistics_for_items \
   property_statistics statement_statistics \
-  taxon_check taxon_check2 used_taxons \
-  deleted_item_values duplicate_link implied_sex sex_distribution \
-  selflink alias-without-label empty-items \
+  taxon_check used_taxons \
+  deleted_item_values implied_sex \
+  empty-items \
   class-type-conflict person \
   read_species taxa-at-specieswiki \
   used-disambiguations pairs \
@@ -20,11 +20,11 @@ PROGRAMS = read_items language_statistics_for_items \
   dates zh cs \
   get_namespaces ns_stats meshid catnamemerge ns_lists \
   most_aliases globe set_dumpdate ce link-label-compare \
-  link_without_label
+  link_without_label find_country_adjectices
   
 OBJECTS = $(addsuffix .o, $(PROGRAMS)) wikidatalib.o
 
-PROGRAMS_WITH_AC = countrymerge bandmerge bandmerge2
+PROGRAMS_WITH_AC = countrymerge bandmerge bandmerge2 find_country_adjectives
 OBJECTS_WITH_AC = $(addsuffix .o, $(PROGRAMS_WITH_AC))
 
 .PHONY: all clean
