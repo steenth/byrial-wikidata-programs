@@ -28,6 +28,8 @@
 #define WIKILIST "list-of-wikis.txt"
 #define WIKIPEDIA_LIST_URL   "http://noc.wikimedia.org/conf/wikipedia.dblist"
 #define WIKIVOYAGE_LIST_URL  "http://noc.wikimedia.org/conf/wikivoyage.dblist"
+#define WIKISOURCE_LIST_URL  "http://noc.wikimedia.org/conf/wikisource.dblist"
+#define WIKIQUOTE_LIST_URL  "http://noc.wikimedia.org/conf/wikiquote.dblist"
 #define NAMESPACEFILE "ns.xml"
 #define API_FORMAT "http://%s%s/w/api.php?action=query&meta=siteinfo&siprop=namespaces|namespacealiases&format=xml"
 
@@ -41,6 +43,8 @@ int main (int argc, char *argv[])
    MYSQL *mysql = open_named_database ("wiki");
    get_namespaces (mysql, WIKIPEDIA_LIST_URL, "wiki\n", ".wikipedia.org", "w_namespace");
    get_namespaces (mysql, WIKIVOYAGE_LIST_URL, "wikivoyage\n", ".wikivoyage.org", "y_namespace");
+   get_namespaces (mysql, WIKISOURCE_LIST_URL, "wikisource\n", ".wikisource.org", "s_namespace");
+   get_namespaces (mysql, WIKIQUOTE_LIST_URL, "wikiquote\n", ".wikiquote.org", "q_namespace");
    close_database (mysql);
 }
 
@@ -233,7 +237,7 @@ void get_namespaces (MYSQL *mysql, const char *list_url, const char *list_suffix
 	  {
 	     if (p != wiki)
 	       {
-		  printf ("Unexpected FEOF\n");
+		  printf ("Unexpected FEOF: %s\n", wiki);
 		  exit (1);
 	       }
 	     break;
