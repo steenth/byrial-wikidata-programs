@@ -30,6 +30,7 @@
 
 const int lang_length = 12; // longest language code is zh-classical (12 bytes)
 const int text_length = 1024;
+const int verbose=0;
 
 void fill_i_use (MYSQL *mysql)
 {
@@ -270,6 +271,9 @@ void read_property (FILE *fp, MYSQL *mysql, int p)
 	get_quot_text (fp, section, sizeof section);
 	pass_text (fp, ":");
 
+	if(verbose)
+		printf("property section %s\n", section);
+
 	if (strcmp (section, "label") == 0)
 	  {
 	     found_labels = read_section (fp, mysql, p, "plabel");
@@ -344,6 +348,8 @@ void read_property (FILE *fp, MYSQL *mysql, int p)
 	       datatype = "time";
 	     else if (strcmp (dt, "globe-coordinate") == 0)
 	       datatype = "coordinate";
+	     else if (strcmp (dt, "quantity") == 0)
+	       datatype = "quantity";
 	     else
 	       {
 		  printf ("Found unknown datatype %s for p%d.\n", dt, p);
@@ -448,6 +454,9 @@ void read_item (FILE *fp, MYSQL *mysql, int q)
 	char section[64];
 	get_quot_text (fp, section, sizeof section);
 	pass_text (fp, ":");
+
+	if(verbose)
+		printf("item section %s\n", section);
 
 	if (strcmp (section, "links") == 0)
 	  {
@@ -569,7 +578,7 @@ void create_tables (MYSQL *mysql, bool drop_tables)
 	     "p_descrs SMALLINT UNSIGNED NOT NULL,"
 	     "p_aliases SMALLINT UNSIGNED NOT NULL,"
 	     "p_alias_langs SMALLINT UNSIGNED NOT NULL,"
-	     "p_datatype ENUM('item', 'string', 'commonsMedia', 'time', 'coordinate') NOT NULL)"
+	     "p_datatype ENUM('item', 'string', 'commonsMedia', 'time', 'coordinate', 'quantity') NOT NULL)"
 	     "ENGINE=MyISAM "
 	     "CHARSET binary");
 
@@ -676,7 +685,7 @@ void create_tables (MYSQL *mysql, bool drop_tables)
 	     "s_refs SMALLINT NOT NULL,"
 	     "s_property MEDIUMINT NOT NULL,"
 	     "s_datatype ENUM('novalue', 'somevalue', 'item',"
-	     "    'string', 'time', 'coordinate', 'bad-coordinate', 'bad-time') NOT NULL,"
+	     "    'string', 'time', 'coordinate', 'quantity', 'bad-coordinate', 'bad-time') NOT NULL,"
 	     "s_item_value INT NOT NULL," // 0 serve as NULL VALUE
 	     "s_string_value VARCHAR(1024),"
 	     "s_item_property_count MEDIUMINT UNSIGNED NOT NULL)"
@@ -692,7 +701,7 @@ void create_tables (MYSQL *mysql, bool drop_tables)
 	     "q_qno SMALLINT NOT NULL,"
 	     "q_property MEDIUMINT NOT NULL,"
 	     "q_datatype ENUM('novalue', 'somevalue', 'item', 'string',"
-	     "    'time', 'coordinate', 'bad-coordinate', 'bad-time') NOT NULL,"
+	     "    'time', 'coordinate', 'quantity', 'bad-coordinate', 'bad-time') NOT NULL,"
 	     "q_item_value INT NOT NULL," // 0 serve as NULL VALUE
 	     "q_string_value VARCHAR(1024))"
 	     "ENGINE=MyISAM "
@@ -719,7 +728,7 @@ void create_tables (MYSQL *mysql, bool drop_tables)
 	     "rc_item INT NOT NULL,"
 	     "rc_property MEDIUMINT NOT NULL,"
 	     "rc_datatype ENUM('novalue', 'somevalue', 'item', 'string',"
-	     "   'time', 'coordinate', 'bad-coordinate', 'bad-time') NOT NULL,"
+	     "   'time', 'coordinate', 'quantity', 'bad-coordinate', 'bad-time') NOT NULL,"
 	     "rc_item_value INT NOT NULL," // 0 serve as NULL VALUE
 	     "rc_string_value VARCHAR(1024))"
 	     "ENGINE=MyISAM "
@@ -934,8 +943,11 @@ int main (int argc, const char *argv[])
 	int entity_letter = getc (fp);
 	int entity_valid = 0;
 	int entity = 0;
-	if (entity_letter == 'Q')
+	if (entity_letter == 'Q') {
 	  entity_valid = fscanf (fp, "%d", &entity);
+	  if(verbose)
+	     printf("%d\n", entity);
+	}
 	else if (entity_letter == 'P')
 	  entity_valid = fscanf (fp, "roperty:P%d", &entity);
 	goto_next_tag (fp, "ns");
@@ -948,6 +960,11 @@ int main (int argc, const char *argv[])
 	     printf ("fscanf() for namespace failed, n=%d\n", n);
 	     return 1;
 	  }
+
+	if(verbose) {
+		printf("ns:%d val:%d\n", ns, entity_valid);
+	}
+
 	if (ns == 0)
 	  {
 	     if (entity_letter != 'Q' || entity_valid != 1)
@@ -1051,9 +1068,12 @@ int read_section (FILE *fp, MYSQL *mysql, int q, const char *table)
    return founds;
 }
 
+
+// # ;links&quot;:{&quot;enwiki&quot;:{&quot;name&quot;:&quot;Africa&quot;,&quot;badges&quot;:[]},&quot;dewiki&q
+
 int read_links (FILE *fp, MYSQL *mysql, int q, int *ns)
 {
-   int founds = 0;
+   int founds = 0, xx;
    int brace = getc (fp);
    if (brace == '{')
      {
@@ -1064,9 +1084,39 @@ int read_links (FILE *fp, MYSQL *mysql, int q, int *ns)
 	     get_quot_text (fp, lang, sizeof lang);
 	     pass_text (fp, ":");
 	     char link[1024];
-	     get_quot_text (fp, link, sizeof link);
+             xx=getc(fp);
+	     if(verbose) {
+		   printf("  read_links lang:%s next:%c\n", lang, xx);
+	     }
+	     if(xx=='{') {
+	        char link_name[1024];
+		do {
+	        	get_quot_text (fp, link_name, sizeof link_name);
+	     		if(verbose) {
+		   		printf("    read_links lang:%s link_name:%s\n", lang, link_name);
+			}
+	                pass_text (fp, ":");
+			if(strcmp(link_name, "name")==0)
+	        		get_quot_text (fp, link, sizeof link);
+			else if(strcmp(link_name, "badges")==0) {
+	     			skip_section (fp, q, link_name);
+			}
+			else {
+		   		printf("    read_links link_name:%s\n", link_name);
+	     			skip_section (fp, q, link_name);
+			}
+	     	        delim = getc (fp);
+	        } while (delim == ',');
+             } else {
+                ungetc(xx, fp);
+	        get_quot_text (fp, link, sizeof link);
+             }
 	     ++ founds;
 	     char project;
+
+	     if(verbose) {
+		   printf("  read_links lang:%s link:%s\n", lang, link);
+	     }
 
 	     size_t langlen = strlen (lang);
 	     if (langlen > 5 && strcmp ("wiki", lang + langlen - 4) == 0)
@@ -1077,6 +1127,16 @@ int read_links (FILE *fp, MYSQL *mysql, int q, int *ns)
 	     else if (langlen > 11 && strcmp ("wikivoyage", lang + langlen - 10) == 0)
 	       {
 		  project = 'y';
+		  lang[langlen - 10] = '\0';
+	       }
+	     else if (langlen > 10 && strcmp ("wikiquote", lang + langlen - 9) == 0)
+	       {
+		  project = 'q';
+		  lang[langlen - 9] = '\0';
+	       }
+	     else if (langlen > 11 && strcmp ("wikisource", lang + langlen - 10) == 0)
+	       {
+		  project = 's';
 		  lang[langlen - 10] = '\0';
 	       }
 	     else
@@ -1332,6 +1392,49 @@ void read_time_value (FILE *fp, struct time_value *value)
      printf ("New calendar model: %d\n", value->tv_model);
 }
 
+
+struct quantity
+{
+   // Keep the floating point numbers as strings to avoid conversions
+   char value[32];
+};
+
+void read_quantity (FILE *fp, struct quantity *value, int q)
+{
+   char link_name[1024];
+   char get_value[1024];
+   int delim;
+
+   delim=getc(fp);
+
+   if(delim=='{') do { // xx
+	
+       	get_quot_text (fp, link_name, sizeof link_name);
+	if(verbose) {
+		printf("    read_quantity link_name:%s\n", link_name);
+	}
+	pass_text (fp, ":");
+	if(strcmp(link_name, "amount")==0)
+		get_quot_text (fp, get_value, sizeof get_value);
+	else if(strcmp(link_name, "unit")==0)
+		get_quot_text (fp, get_value, sizeof get_value);
+	else if(strcmp(link_name, "upperBound")==0)
+		get_quot_text (fp, get_value, sizeof get_value);
+	else if(strcmp(link_name, "lowerBound")==0)
+		get_quot_text (fp, get_value, sizeof get_value);
+	else {
+		printf("    read_quantity link_name:%s\n", link_name);
+	     	skip_section (fp, q, link_name);
+	}
+        delim = getc (fp);
+   } while (delim == ',');
+   if (delim == ']')
+		printf("    read_quantity end delim:%c\n", delim);
+   if(verbose)
+		printf("    read_quantity end delim:%c\n", delim);
+   strcpy(value->value, "000");	
+}
+
 struct coordinate
 {
    // Keep the floating point numbers as strings to avoid conversions
@@ -1408,6 +1511,7 @@ void read_coordinate (FILE *fp, struct coordinate *value)
 	    value->co_globe != 308 &&	 // Mercury
 	    value->co_globe != 313 &&	 // Venus
 	    value->co_globe != 405 &&	 // Moon
+	    value->co_globe != 2565 &&	 // Titan (Saturn moon)
 	    value->co_globe != 15034	 // Mimas (Saturn moon)
 	   )
 	  printf ("Coordinates for new globe: %d\n", value->co_globe);
@@ -1415,7 +1519,7 @@ void read_coordinate (FILE *fp, struct coordinate *value)
 }
 
 enum datatype { to_be_determined, novalue, somevalue, item, string, time,
-     coordinate, bad_coordinate, bad_time };
+     coordinate, bad_coordinate, quantity, bad_time };
 
 struct claim
 {
@@ -1425,6 +1529,7 @@ struct claim
    int item_value;
    struct time_value time_value;
    struct coordinate coordinate;
+   struct quantity quantity;
 };
 
 enum claim_type { ct_claim, ct_qualifier, ct_ref };
@@ -1457,6 +1562,10 @@ const char *format_claim_values (struct claim *claim)
 	break;
       case coordinate:
 	ret = snprintf (format, sizeof format, "%d, \"coordinate\", 0, NULL",
+		       claim->property);
+	break;
+      case quantity:
+	ret = snprintf (format, sizeof format, "%d, \"quantity\", 0, NULL",
 		       claim->property);
 	break;
       case bad_coordinate:
@@ -1506,6 +1615,8 @@ void read_claim (FILE *fp, int q, struct claim *claim)
 	exit (1);
      }
 
+   if(verbose)
+	printf("    read_claim q:%d pro%d\n", q, claim->property);
    if (claim->datatype == to_be_determined)
      {
 	pass_text (fp, ",");
@@ -1537,6 +1648,11 @@ void read_claim (FILE *fp, int q, struct claim *claim)
 	  {
 	     claim->datatype = coordinate;
 	     read_coordinate (fp, & (claim->coordinate));
+	  }
+	else if (strcmp (datatype, "quantity") == 0)
+	  {
+	     claim->datatype = quantity;
+	     read_quantity (fp, & (claim->quantity), q);
 	  }
 	else if (strcmp (datatype, "bad") == 0)
 	  {
@@ -1622,7 +1738,7 @@ void read_statement (FILE *fp, MYSQL *mysql, int q, int *founds)
    ++ statement_counter;
    int no_of_refs = 0;
    int no_of_qualifiers = 0;
-   struct claim claim = { 0, to_be_determined, "", 0, {0,0,0,0,0,0,0,0,0,0,0}, {"","","",0,""} };
+   struct claim claim = { 0, to_be_determined, "", 0, {0,0,0,0,0,0,0,0,0,0,0}, {"","","",0,""}, {""} };
    int delim;
    do
      {
