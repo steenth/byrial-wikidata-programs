@@ -477,7 +477,7 @@ bool table_empty (MYSQL *mysql, const char *table)
  */
 void do_query (MYSQL *mysql, const char *format, ...)
 {
-   char query[2000];
+   char query[20000];
    va_list ap;
    va_start (ap, format);
    int len = vsnprintf (query, sizeof query, format, ap);
